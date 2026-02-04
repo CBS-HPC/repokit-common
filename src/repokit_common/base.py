@@ -70,7 +70,21 @@ def install_base_deps(deps: list[str] = BASE_DEPS) -> None:
 
 
 def project_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent.parent
+    here = Path(__file__).resolve()
+    # If repokit-common is vendored under setup/repokit/external, hop to project root.
+    # Expected layout: <project>/setup/repokit/external/repokit-common/src/repokit_common/base.py
+    try:
+        if (
+            here.parents[3].name == "repokit-common"
+            and here.parents[4].name == "external"
+            and here.parents[5].name == "repokit"
+            and here.parents[6].name == "setup"
+        ):
+            return here.parents[7]
+    except IndexError:
+        pass
+    # Default: repo root when repokit-common is used standalone
+    return here.parents[2]
 
 
 # Convenience constant + helper
