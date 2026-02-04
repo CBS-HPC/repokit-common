@@ -75,12 +75,12 @@ def project_root() -> Path:
     # Expected layout: <project>/setup/repokit/external/repokit-common/src/repokit_common/base.py
     try:
         if (
-            here.parents[3].name == "repokit-common"
-            and here.parents[4].name == "external"
-            and here.parents[5].name == "repokit"
-            and here.parents[6].name == "setup"
+            here.parents[2].name == "repokit-common"
+            and here.parents[3].name == "external"
+            and here.parents[4].name == "repokit"
+            and here.parents[5].name == "setup"
         ):
-            return here.parents[7]
+            return here.parents[6]
     except IndexError:
         pass
     # Default: repo root when repokit-common is used standalone
