@@ -71,7 +71,7 @@ def install_base_deps(deps: list[str] = BASE_DEPS) -> None:
 
 def _find_project_root_from_cwd() -> Path | None:
     cwd = Path.cwd().resolve()
-    markers = {"pyproject.toml", ".cookiecutter", "setup"}
+    markers = {"activate.ps1", "activate.sh", "deactivate.ps1", "deactivate.sh"}
     for p in (cwd, *cwd.parents):
         if any((p / m).exists() for m in markers):
             return p
