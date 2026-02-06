@@ -1,10 +1,13 @@
-import json
+﻿import json
 import os
 import sys
-import pathspec
 from pathlib import Path
-from pathspec.patterns import GitWildMatchPattern
 from typing import Optional, Union
+
+import pathspec
+from pathspec.patterns import GitWildMatchPattern
+
+from .base import PROJECT_ROOT
 
 JSON_FILENAME = "cookiecutter.json"
 TOOL_NAME = "cookiecutter"
@@ -33,9 +36,6 @@ else:
 
     READ_MODE = ("rb", None)
     WRITE_MODE = ("w", "utf-8")
-
-from .base import PROJECT_ROOT
-
 
 def toml_ignore(
     folder: str = None,
@@ -79,7 +79,7 @@ def toml_ignore(
                 spec = pathspec.PathSpec.from_lines(GitWildMatchPattern, patterns)
                 return spec, patterns
         except Exception as e:
-            print(f"❌ Error reading [{tool_name}] from {toml_full_path}: {e}")
+            print(f"âŒ Error reading [{tool_name}] from {toml_full_path}: {e}")
 
     return None, []
 
@@ -157,10 +157,10 @@ def write_toml(
             with open(json_file_path, encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"❌ Failed to read {json_filename}: {e}")
+            print(f"âŒ Failed to read {json_filename}: {e}")
 
     if not isinstance(data, dict):
-        print("❌ No valid dictionary to write.")
+        print("âŒ No valid dictionary to write.")
         return
 
     toml_data = {}
@@ -169,7 +169,7 @@ def write_toml(
             try:
                 toml_data = load_toml(f)
             except Exception as e:
-                print(f"❌ Failed to parse existing TOML: {e}")
+                print(f"âŒ Failed to parse existing TOML: {e}")
                 return
 
     if "tool" not in toml_data:
@@ -213,7 +213,7 @@ def _parse_dataset_path(raw: str | Path) -> dict:
     if not s:
         s = "."
 
-    # Use normpath to clean up things like "data/." → "data"
+    # Use normpath to clean up things like "data/." â†’ "data"
     s = os.path.normpath(s)
 
     # IMPORTANT: do NOT resolve; keep it relative if it was relative
@@ -286,3 +286,5 @@ def toml_dataset_path(
     
     # 3) Final fallback
     return _parse_dataset_path(first_pattern), first_pattern
+
+
