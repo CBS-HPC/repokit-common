@@ -69,10 +69,45 @@ def install_base_deps(deps: list[str] = BASE_DEPS) -> None:
             pass
 
 
+def _find_project_root_from_cwd() -> Path | None:
+    cwd = Path.cwd().resolve()
+    markers = {"pyproject.toml", ".cookiecutter", "setup"}
+    for p in (cwd, *cwd.parents):
+        if any((p / m).exists() for m in markers):
+            return p
+    return None
+
+
 def project_root() -> Path:
+    # 1) explicit override
+    env_root = os.getenv("REPOKIT_PROJECT_ROOT") or os.getenv("RT_PROJECT_ROOT")
+    if env_root:
+        p = Path(env_root).expanduser().resolve()
+        if p.exists():
+            return p
+
+    # 2) cwd-based detection (works for non-editable installs)
+    cwd_root = _find_project_root_from_cwd()
+    if cwd_root:
+        return cwd_root
+
+    # 3) git repo root (best effort)
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path.cwd()),
+        )
+        if r.returncode == 0:
+            p = Path(r.stdout.strip())
+            if p.exists():
+                return p
+    except Exception:
+        pass
+
+    # 4) vendored layout under setup/repokit/external
     here = Path(__file__).resolve()
-    # If repokit-common is vendored under setup/repokit/external, hop to project root.
-    # Expected layout: <project>/setup/repokit/external/repokit-common/src/repokit_common/base.py
     try:
         if (
             here.parents[2].name == "repokit-common"
@@ -83,9 +118,9 @@ def project_root() -> Path:
             return here.parents[6]
     except IndexError:
         pass
-    # Default: repo root when repokit-common is used standalone
-    return here.parents[2]
 
+    # 5) fallback: repo root when repokit-common is used standalone
+    return here.parents[2]
 
 # Convenience constant + helper
 PROJECT_ROOT = project_root()
