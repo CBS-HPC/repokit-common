@@ -9,6 +9,7 @@ import sys
 from functools import wraps
 from dotenv import load_dotenv
 import ctypes
+
 try:
     import winreg  # type: ignore[attr-defined]
 except ImportError:
@@ -102,7 +103,7 @@ def set_packages(version_control, programming_language):
     if not programming_language or not version_control:
         return []
     install_packages = []
-    #install_packages = [
+    # install_packages = [
     #    "python-dotenv",
     #    "pyyaml",
     #    "requests",
@@ -116,12 +117,12 @@ def set_packages(version_control, programming_language):
     #    "streamlit",
     #    "jsonschema",
     #    "dirhash",
-    #]
+    # ]
 
     # Add toml package if Python version < 3.11
-    #if sys.version_info < (3, 11):
+    # if sys.version_info < (3, 11):
     #    install_packages.append("toml")
-    #else:
+    # else:
     #    install_packages.append("tomli-w")
 
     if programming_language.lower() == "python":
@@ -134,9 +135,9 @@ def set_packages(version_control, programming_language):
         install_packages.extend(["jupyterlab", "saspy"])
 
     if version_control.lower() == "dvc" and not is_installed("dvc", "DVC"):
-        #install_packages.extend(["dvc[all]"])
+        # install_packages.extend(["dvc[all]"])
         install_packages.extend(["dvc"])
-    #elif version_control.lower() == "datalad" and not is_installed("datalad", "Datalad"):
+    # elif version_control.lower() == "datalad" and not is_installed("datalad", "Datalad"):
     #    install_packages.extend(["datalad-installer", "datalad", "pyopenssl"])
 
     return install_packages
@@ -273,8 +274,7 @@ def _win_add_to_user_path(path: str) -> bool:
         WM_SETTINGCHANGE = 0x001A
         SMTO_ABORTIFHUNG = 0x0002
         ctypes.windll.user32.SendMessageTimeoutW(
-            HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment",
-            SMTO_ABORTIFHUNG, 5000, None
+            HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 5000, None
         )
     return True
 
@@ -303,7 +303,7 @@ def exe_to_path(executable: str = None, path: str = None, env_file: str = ".env"
         if os_type == "windows":
             # Use setx to set the environment variable permanently in Windows
             _win_add_to_user_path(path)
-            #subprocess.run(["setx", "PATH", f"{path};%PATH%"], check=True)
+            # subprocess.run(["setx", "PATH", f"{path};%PATH%"], check=True)
         else:
             # On macOS/Linux, add the path to the shell profile file
             profile_file = os.path.expanduser("~/.bashrc")  # or ~/.zshrc depending on the shell
@@ -394,8 +394,7 @@ def _win_remove_from_user_path(path: str) -> bool:
     WM_SETTINGCHANGE = 0x001A
     SMTO_ABORTIFHUNG = 0x0002
     ctypes.windll.user32.SendMessageTimeoutW(
-        HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment",
-        SMTO_ABORTIFHUNG, 5000, None
+        HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 5000, None
     )
 
     # Update this Python process' PATH too
@@ -437,7 +436,7 @@ def remove_from_env(path: str):
         # Use setx to update PATH permanently on Windows
         try:
             _win_remove_from_user_path(path)
-            #subprocess.run(["setx", "PATH", os.environ["PATH"]], check=True)
+            # subprocess.run(["setx", "PATH", os.environ["PATH"]], check=True)
             print(f"Path {path} removed permanently on Windows.")
         except subprocess.CalledProcessError as e:
             print(f"Failed to update PATH permanently on Windows: {e}")
@@ -658,10 +657,8 @@ def run_script(programming_language, script_command=None):
 
 
 def _run(cmd: list[str], cwd: pathlib.Path, check: bool = True, capture: bool = False):
-    return subprocess.run(
-        cmd, cwd=str(cwd), check=check,
-        capture_output=capture, text=True
-    )
+    return subprocess.run(cmd, cwd=str(cwd), check=check, capture_output=capture, text=True)
+
 
 def ensure_correct_kernel(func):
     """Decorator to ensure the function runs with the correct Python kernel."""

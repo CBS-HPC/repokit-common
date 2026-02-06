@@ -133,7 +133,6 @@ def repo_user_info(version_control, repo_name, code_repo):
         return None, None, None, None
 
 
-
 def prompt_user(question, options):
     """
     Prompts the user with a question and a list of options to select from.

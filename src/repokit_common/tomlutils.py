@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import sys
 from pathlib import Path
@@ -36,6 +36,7 @@ else:
 
     READ_MODE = ("rb", None)
     WRITE_MODE = ("w", "utf-8")
+
 
 def toml_ignore(
     folder: str = None,
@@ -249,12 +250,15 @@ def toml_dataset_path(
 
     # 2) If no usable explicit pattern, try TOML config
     if not first_pattern:
-        cfg = read_toml(
-            folder=str(PROJECT_ROOT),
-            json_filename=JSON_FILENAME,
-            tool_name="datasets",
-            toml_path=TOML_PATH,
-        ) or {}
+        cfg = (
+            read_toml(
+                folder=str(PROJECT_ROOT),
+                json_filename=JSON_FILENAME,
+                tool_name="datasets",
+                toml_path=TOML_PATH,
+            )
+            or {}
+        )
 
         patterns = cfg.get("patterns")
 
@@ -274,17 +278,14 @@ def toml_dataset_path(
     if not first_pattern:
         first_pattern = str(PROJECT_ROOT / "/data/*")
 
-       # Write back
+    # Write back
     write_toml(
-            data = {"patterns":first_pattern},
-            folder = str(PROJECT_ROOT),
-            json_filename = JSON_FILENAME,
-            tool_name = "datasets",
-            toml_path = TOML_PATH,
-        )
+        data={"patterns": first_pattern},
+        folder=str(PROJECT_ROOT),
+        json_filename=JSON_FILENAME,
+        tool_name="datasets",
+        toml_path=TOML_PATH,
+    )
 
-    
     # 3) Final fallback
     return _parse_dataset_path(first_pattern), first_pattern
-
-

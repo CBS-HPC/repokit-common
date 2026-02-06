@@ -71,7 +71,16 @@ def install_base_deps(deps: list[str] = BASE_DEPS) -> None:
 
 def _find_project_root_from_cwd() -> Path | None:
     cwd = Path.cwd().resolve()
-    markers = {"activate.ps1", "activate.sh", "deactivate.ps1", "deactivate.sh", "pyproject.toml", "dmp.json"}
+    markers = {
+        "activate.ps1",
+        "activate.sh",
+        "deactivate.ps1",
+        "deactivate.sh",
+        "pyproject.toml",
+        "dmp.json",
+        ".venv",
+        ".conda",
+    }
     for p in (cwd, *cwd.parents):
         if any((p / m).exists() for m in markers):
             return p
@@ -79,26 +88,10 @@ def _find_project_root_from_cwd() -> Path | None:
 
 
 def project_root() -> Path:
-
-    # 1) cwd-based detection (works for non-editable installs)
+    # 1) cwd-based marker detection (works for non-editable installs)
     cwd_root = _find_project_root_from_cwd()
     if cwd_root:
         return cwd_root
-
-    # 3) git repo root (best effort)
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            cwd=str(Path.cwd()),
-        )
-        if r.returncode == 0:
-            p = Path(r.stdout.strip())
-            if p.exists():
-                return p
-    except Exception:
-        pass
 
     # 2) vendored layout under setup/repokit/external
     here = Path(__file__).resolve()
@@ -113,23 +106,9 @@ def project_root() -> Path:
     except IndexError:
         pass
 
-    # 3) git repo root (best effort)
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            cwd=str(Path.cwd()),
-        )
-        if r.returncode == 0:
-            p = Path(r.stdout.strip())
-            if p.exists():
-                return p
-    except Exception:
-        pass
+    # 3) standalone mode: use the current working directory directly.
+    return Path.cwd().resolve()
 
-    # 5) fallback: repo root when repokit-common is used standalone
-    return here.parents[2]
 
 # Convenience constant + helper
 PROJECT_ROOT = project_root()
