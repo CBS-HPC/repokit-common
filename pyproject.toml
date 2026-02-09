@@ -61,7 +61,7 @@ where = [
 ]
 
 [tool.datasets]
-patterns = "C:\\data\\*"
+patterns = ""
 
 [tool.mypy]
 python_version = "3.12"
