@@ -1,4 +1,4 @@
-import importlib.metadata
+﻿import importlib.metadata
 import importlib.util
 import os
 import pathlib
@@ -42,22 +42,22 @@ def create_uv_project():
     env["UV_LINK_MODE"] = "copy"
 
     if uv_lock_path.exists():
-        print("✔️  uv.lock already exists — skipping `uv init` or `uv lock`.")
+        print("âœ”ï¸  uv.lock already exists â€” skipping `uv init` or `uv lock`.")
         return
 
     if not install_uv():
-        print("❌ 'uv' is not installed or not available in PATH.")
+        print("âŒ 'uv' is not installed or not available in PATH.")
         return
 
     try:
         if pyproject_path.exists():
-            print("✅ pyproject.toml found — running `uv lock`...")
+            print("âœ… pyproject.toml found â€” running `uv lock`...")
             subprocess.run(["uv", "lock"], check=True, env=env, cwd=project_path)
         else:
-            print("No pyproject.toml found — running `uv init`...")
+            print("No pyproject.toml found â€” running `uv init`...")
             subprocess.run(["uv", "init"], check=True, env=env, cwd=project_path)
     except subprocess.CalledProcessError as e:
-        print(f"❌ Command failed: {e}")
+        print(f"âŒ Command failed: {e}")
 
 
 def write_uv_requires(toml_file: str = "pyproject.toml"):
@@ -146,7 +146,7 @@ def set_packages(version_control, programming_language):
 def package_installer(required_libraries: list = None):
     """
     Install missing libraries using uv if available, otherwise fallback to pip.
-    Preference order: uv add → uv pip install → pip install
+    Preference order: uv add â†’ uv pip install â†’ pip install
     """
 
     def safe_uv_add(lib, project_root):
@@ -204,7 +204,7 @@ def package_installer(required_libraries: list = None):
             if (name := dist.metadata.get("Name")) is not None
         }
     except Exception as e:
-        print(f"⚠️ Error checking installed packages: {e}")
+        print(f"âš ï¸ Error checking installed packages: {e}")
         return
 
     # Normalize names and find missing ones
@@ -218,7 +218,7 @@ def package_installer(required_libraries: list = None):
     if not missing_libraries:
         return
 
-    # print(f"📦 Installing missing libraries: {missing_libraries}")
+    # print(f"ðŸ“¦ Installing missing libraries: {missing_libraries}")
 
     uv_available = install_uv()
     try:
@@ -239,7 +239,7 @@ def package_installer(required_libraries: list = None):
                 [sys.executable, "-m", "pip", "install", lib], check=True, stderr=subprocess.DEVNULL
             )
         except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to install {lib} with pip: {e}")
+            print(f"âŒ Failed to install {lib} with pip: {e}")
 
 
 def _win_add_to_user_path(path: str) -> bool:
@@ -690,12 +690,29 @@ def ensure_correct_kernel(func):
         if current_executable != python_kernel and current_base != kernel_base:
             print(f"Restarting with the correct Python kernel: {python_kernel}")
 
-            # Re-run the script with the correct Python interpreter
-            script_path = os.path.abspath(__file__)
-            subprocess.run([python_kernel, script_path] + sys.argv[1:], check=True)
+            entry = os.path.basename(sys.argv[0]).lower()
+            module = None
+            if entry.startswith("repokit-dmp"):
+                module = "repokit_dmp.cli"
+            elif entry.startswith("repokit-backup"):
+                module = "repokit_backup.cli"
+            elif entry.startswith("repokit"):
+                module = "repokit.cli"
+
+            if module:
+                subprocess.run([python_kernel, "-m", module, *sys.argv[1:]], check=True)
+            elif sys.argv[0].endswith(".py"):
+                subprocess.run([python_kernel, sys.argv[0], *sys.argv[1:]], check=True)
+            else:
+                raise RuntimeError(
+                    "Unable to restart with the requested kernel: unknown entrypoint."
+                )
             sys.exit()  # Terminate the current process after restarting
 
         # If the kernel is correct, execute the function normally
         return func(*args, **kwargs)
 
     return wrapper
+
+
+
