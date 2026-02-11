@@ -32,6 +32,7 @@ dependencies = [
     "requests",
     "toml ; python_version < \"3.11\"",
     "tomli-w ; python_version >= \"3.11\"",
+    "tomlkit",
 ]
 requires-python = ">=3.12"
 

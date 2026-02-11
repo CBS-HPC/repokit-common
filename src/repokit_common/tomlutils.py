@@ -13,6 +13,11 @@ JSON_FILENAME = "cookiecutter.json"
 TOOL_NAME = "cookiecutter"
 TOML_PATH = "pyproject.toml"
 
+try:
+    import tomlkit
+except Exception:
+    tomlkit = None
+
 if sys.version_info < (3, 11):
     import toml
 
@@ -36,6 +41,45 @@ else:
 
     READ_MODE = ("rb", None)
     WRITE_MODE = ("w", "utf-8")
+
+
+def _write_tool_section_with_tomlkit(
+    toml_file_path: str,
+    tool_name: str,
+    data: dict,
+) -> bool:
+    """
+    Write [tool.<tool_name>] with tomlkit to preserve comments and formatting.
+    Returns True if write succeeded, False if tomlkit is unavailable or failed.
+    """
+    if tomlkit is None:
+        return False
+
+    try:
+        if os.path.exists(toml_file_path):
+            text = Path(toml_file_path).read_text(encoding="utf-8")
+            doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
+        else:
+            doc = tomlkit.document()
+
+        tool_table = doc.get("tool")
+        if not isinstance(tool_table, dict):
+            tool_table = tomlkit.table()
+            doc["tool"] = tool_table
+
+        section = tool_table.get(tool_name)
+        if not isinstance(section, dict):
+            section = tomlkit.table()
+            tool_table[tool_name] = section
+
+        for key, value in data.items():
+            section[key] = value
+
+        Path(toml_file_path).write_text(tomlkit.dumps(doc), encoding="utf-8")
+        return True
+    except Exception as e:
+        print(f"Failed to preserve TOML comments with tomlkit: {e}")
+        return False
 
 
 def toml_ignore(
@@ -80,7 +124,7 @@ def toml_ignore(
                 spec = pathspec.PathSpec.from_lines(GitWildMatchPattern, patterns)
                 return spec, patterns
         except Exception as e:
-            print(f"âŒ Error reading [{tool_name}] from {toml_full_path}: {e}")
+            print(f"Error reading [{tool_name}] from {toml_full_path}: {e}")
 
     return None, []
 
@@ -158,10 +202,14 @@ def write_toml(
             with open(json_file_path, encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"âŒ Failed to read {json_filename}: {e}")
+            print(f"Failed to read {json_filename}: {e}")
 
     if not isinstance(data, dict):
-        print("âŒ No valid dictionary to write.")
+        print("No valid dictionary to write.")
+        return
+
+    # Prefer comment-preserving updates when tomlkit is available.
+    if _write_tool_section_with_tomlkit(toml_file_path, tool_name, data):
         return
 
     toml_data = {}
@@ -170,7 +218,7 @@ def write_toml(
             try:
                 toml_data = load_toml(f)
             except Exception as e:
-                print(f"âŒ Failed to parse existing TOML: {e}")
+                print(f"Failed to parse existing TOML: {e}")
                 return
 
     if "tool" not in toml_data:
