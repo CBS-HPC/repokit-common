@@ -28,6 +28,11 @@ from .base import PROJECT_ROOT, install_uv
 from .paths import check_path_format, get_relative_path
 from .secretstore import load_from_env, save_to_env
 
+try:
+    import tomlkit
+except Exception:
+    tomlkit = None
+
 
 def create_uv_project():
     """
@@ -85,6 +90,26 @@ def write_uv_requires(toml_file: str = "pyproject.toml"):
     path = pathlib.Path(toml_file)
     if not path.is_absolute():
         path = PROJECT_ROOT / path.name
+
+    # Prefer preserving comments/formatting when tomlkit is available.
+    if tomlkit is not None:
+        try:
+            if path.exists():
+                text = path.read_text(encoding="utf-8")
+                config_doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
+            else:
+                config_doc = tomlkit.document()
+
+            project_table = config_doc.get("project")
+            if not isinstance(project_table, dict):
+                project_table = tomlkit.table()
+                config_doc["project"] = project_table
+
+            project_table["requires-python"] = requires
+            path.write_text(tomlkit.dumps(config_doc), encoding="utf-8")
+            return
+        except Exception as e:
+            print(f"Could not preserve TOML comments with tomlkit: {e}")
 
     config = {}
     if path.exists():
