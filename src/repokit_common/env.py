@@ -552,6 +552,24 @@ def is_installed(executable: str = None, name: str = None, local_install: bool =
             if candidate.exists():
                 return exe_to_path(executable, str(candidate.parent))
 
+        # Fallback: search under local tool folders (e.g. ./bin/rclone-*/rclone.exe)
+        search_roots = [
+            PROJECT_ROOT / "bin",
+            PROJECT_ROOT / ".venv",
+            PROJECT_ROOT / ".conda",
+        ]
+        for root in search_roots:
+            if not root.exists():
+                continue
+            for exe_name in executable_names:
+                try:
+                    for candidate in root.rglob(exe_name):
+                        if candidate.is_file():
+                            return exe_to_path(executable, str(candidate.parent))
+                except OSError:
+                    # Ignore unreadable folders and continue searching other roots.
+                    continue
+
     if shutil.which(executable):
         return exe_to_path(executable, os.path.dirname(shutil.which(executable)))
     else:
