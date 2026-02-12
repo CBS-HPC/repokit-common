@@ -511,6 +511,98 @@ def is_installed(
     if name is None:
         name = executable
 
+    if (
+        not isinstance(executable, str)
+        or not isinstance(name, str)
+        or (local_path is not None and not isinstance(local_path, str))
+    ):
+        raise ValueError(
+            "'executable' and 'name' must be strings; 'local_path' must be string or None."
+        )
+
+    def _exe_names(exe: str) -> list[str]:
+        names = [exe]
+        if platform.system().lower() == "windows":
+            for ext in (".exe", ".bat", ".cmd"):
+                if not exe.lower().endswith(ext):
+                    names.append(f"{exe}{ext}")
+        return names
+
+    def _find_exe(root: pathlib.Path, exe_names: list[str]) -> pathlib.Path | None:
+        if not root.exists():
+            return None
+        for n in exe_names:
+            p = root / n
+            if p.is_file():
+                return p.resolve()
+        for n in exe_names:
+            try:
+                for p in root.rglob(n):
+                    if p.is_file():
+                        return p.resolve()
+            except OSError:
+                pass
+        return None
+
+    path = load_from_env(executable)
+    path_obj = pathlib.Path(path).resolve() if path else None
+
+    if local_path is not None:
+        local_root = pathlib.Path(local_path)
+        if not local_root.is_absolute():
+            local_root = PROJECT_ROOT / local_root
+        local_root = local_root.resolve()
+        names = _exe_names(executable)
+
+        if path_obj and path_obj.exists():
+            try:
+                path_obj.relative_to(local_root)
+                if path_obj.is_file() and path_obj.name in names:
+                    return exe_to_path(executable, str(path_obj.parent))
+                if path_obj.is_dir():
+                    m = _find_exe(path_obj, names)
+                    if m:
+                        return exe_to_path(executable, str(m.parent))
+            except ValueError:
+                pass
+
+        m = _find_exe(local_root, names)
+        if m:
+            return exe_to_path(executable, str(m.parent))
+
+        resolved = shutil.which(executable)
+        if resolved:
+            rp = pathlib.Path(resolved).resolve()
+            try:
+                rp.relative_to(local_root)
+                return exe_to_path(executable, str(rp.parent))
+            except ValueError:
+                pass
+
+        return False
+
+    if path_obj and path_obj.exists():
+        pdir = path_obj.parent if path_obj.is_file() else path_obj
+        return exe_to_path(executable, str(pdir))
+    elif path_obj and not path_obj.exists():
+        remove_from_env(str(path_obj))
+
+    resolved = shutil.which(executable)
+    if resolved:
+        return exe_to_path(executable, str(pathlib.Path(resolved).resolve().parent))
+
+    print(f"{name} is not on Path")
+    return False
+
+
+def is_installed_old(
+    executable: str = None,
+    name: str = None,
+    local_path: str | None = None,
+):
+    if name is None:
+        name = executable
+
     # Validate input types.
     if (
         not isinstance(executable, str)
@@ -521,54 +613,24 @@ def is_installed(
             "'executable' and 'name' must be strings; 'local_path' must be string or None."
         )
 
-    # Local lookup first when requested.
-    if local_path is not None:
+    path = load_from_env(executable)
+
+    if path:
+        path = os.path.abspath(path)
+   
+    if path and os.path.exists(path) and local_path is not None:    
+            
         local_root = pathlib.Path(local_path)
         if not local_root.is_absolute():
             local_root = PROJECT_ROOT / local_root
 
-        os_type = platform.system().lower()
-        executable_names = [executable]
-        if os_type == "windows":
-            for ext in (".exe", ".bat", ".cmd"):
-                if not executable.lower().endswith(ext):
-                    executable_names.append(f"{executable}{ext}")
+        exe_path = pathlib.Path(path).resolve()
+        root = local_root.resolve()
 
-        if not local_root.exists():
-            return False
-
-        for exe_name in executable_names:
-            direct = local_root / exe_name
-            if direct.is_file():
-                local_dir = str(direct.parent.resolve())
-                current_path = os.environ.get("PATH", "")
-                if current_path:
-                    os.environ["PATH"] = f"{local_dir}{os.pathsep}{current_path}"
-                else:
-                    os.environ["PATH"] = local_dir
-                save_to_env(get_relative_path(local_dir), executable.upper())
-                return True
-
-        for exe_name in executable_names:
-            try:
-                for candidate in local_root.rglob(exe_name):
-                    if candidate.is_file():
-                        local_dir = str(candidate.parent.resolve())
-                        current_path = os.environ.get("PATH", "")
-                        if current_path:
-                            os.environ["PATH"] = f"{local_dir}{os.pathsep}{current_path}"
-                        else:
-                            os.environ["PATH"] = local_dir
-                        save_to_env(get_relative_path(local_dir), executable.upper())
-                        return True
-            except OSError:
-                continue
-
-        return False
-
-    path = load_from_env(executable)
-    if path:
-        path = os.path.abspath(path)
+        try:
+            exe_path.relative_to(root)
+        except ValueError:
+            path = None
 
     if path and os.path.exists(path):
         return exe_to_path(executable, path)
