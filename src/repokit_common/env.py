@@ -503,19 +503,61 @@ def exe_to_env(executable: str = None, path: str = None, env_file: str = ".env")
         return False
 
 
-def is_installed(executable: str = None, name: str = None, local_install: bool = False):
+def is_installed(
+    executable: str = None,
+    name: str = None,
+    local_path: str | None = None,
+    local_install: bool = False,
+):
     if name is None:
         name = executable
 
-    # Check if executable and name are provided as strings and local_install is bool
+    # Validate input types.
     if (
         not isinstance(executable, str)
         or not isinstance(name, str)
+        or (local_path is not None and not isinstance(local_path, str))
         or not isinstance(local_install, bool)
     ):
         raise ValueError(
-            "'executable' and 'name' must be strings and 'local_install' must be bool."
+            "'executable' and 'name' must be strings; "
+            "'local_path' must be string or None; 'local_install' must be bool."
         )
+
+    # Local lookup first when requested.
+    if local_path is not None or local_install:
+        os_type = platform.system().lower()
+        executable_names = [executable]
+        if os_type == "windows":
+            for ext in (".exe", ".bat", ".cmd"):
+                if not executable.lower().endswith(ext):
+                    executable_names.append(f"{executable}{ext}")
+
+        search_roots = []
+        if local_path is not None:
+            local_root = pathlib.Path(local_path)
+            if not local_root.is_absolute():
+                local_root = PROJECT_ROOT / local_root
+            search_roots.append(local_root)
+        elif local_install:
+            search_roots.extend([PROJECT_ROOT / "bin", PROJECT_ROOT / ".venv", PROJECT_ROOT / ".conda"])
+
+        for root in search_roots:
+            if not root.exists():
+                continue
+
+            for exe_name in executable_names:
+                direct = root / exe_name
+                if direct.is_file():
+                    return exe_to_path(executable, str(direct.parent))
+
+            for exe_name in executable_names:
+                try:
+                    for candidate in root.rglob(exe_name):
+                        if candidate.is_file():
+                            return exe_to_path(executable, str(candidate.parent))
+                except OSError:
+                    continue
 
     path = load_from_env(executable)
     if path:
@@ -525,50 +567,6 @@ def is_installed(executable: str = None, name: str = None, local_install: bool =
         return exe_to_path(executable, path)
     elif path and not os.path.exists(path):
         remove_from_env(path)
-
-    if local_install:
-        os_type = platform.system().lower()
-        executable_names = [executable]
-
-        if os_type == "windows":
-            for ext in (".exe", ".bat", ".cmd"):
-                if not executable.lower().endswith(ext):
-                    executable_names.append(f"{executable}{ext}")
-
-        local_candidates = []
-        for exe_name in executable_names:
-            local_candidates.extend(
-                [
-                    PROJECT_ROOT / exe_name,
-                    PROJECT_ROOT / "bin" / exe_name,
-                    PROJECT_ROOT / ".venv" / "Scripts" / exe_name,
-                    PROJECT_ROOT / ".venv" / "bin" / exe_name,
-                    PROJECT_ROOT / ".conda" / "Scripts" / exe_name,
-                    PROJECT_ROOT / ".conda" / "bin" / exe_name,
-                ]
-            )
-
-        for candidate in local_candidates:
-            if candidate.exists():
-                return exe_to_path(executable, str(candidate.parent))
-
-        # Fallback: search under local tool folders (e.g. ./bin/rclone-*/rclone.exe)
-        search_roots = [
-            PROJECT_ROOT / "bin",
-            PROJECT_ROOT / ".venv",
-            PROJECT_ROOT / ".conda",
-        ]
-        for root in search_roots:
-            if not root.exists():
-                continue
-            for exe_name in executable_names:
-                try:
-                    for candidate in root.rglob(exe_name):
-                        if candidate.is_file():
-                            return exe_to_path(executable, str(candidate.parent))
-                except OSError:
-                    # Ignore unreadable folders and continue searching other roots.
-                    continue
 
     if shutil.which(executable):
         return exe_to_path(executable, os.path.dirname(shutil.which(executable)))
