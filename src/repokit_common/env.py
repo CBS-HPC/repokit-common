@@ -93,7 +93,6 @@ def write_uv_requires(toml_file: str = "pyproject.toml"):
 
     config.setdefault("project", {})
     config["project"]["requires-python"] = requires
-    # config["tool"]["uv"]["python"] = version_str
 
     with open(path, write_mode[0], encoding=write_mode[1]) as f:
         dump_toml(config, f)
@@ -103,27 +102,6 @@ def set_packages(version_control, programming_language):
     if not programming_language or not version_control:
         return []
     install_packages = []
-    # install_packages = [
-    #    "python-dotenv",
-    #    "pyyaml",
-    #    "requests",
-    #    "beautifulsoup4",
-    #    "nbformat",
-    #    "setuptools",
-    #    "pathspec",
-    #    "psutil",
-    #    "py-cpuinfo",
-    #    "jinja2",
-    #    "streamlit",
-    #    "jsonschema",
-    #    "dirhash",
-    # ]
-
-    # Add toml package if Python version < 3.11
-    # if sys.version_info < (3, 11):
-    #    install_packages.append("toml")
-    # else:
-    #    install_packages.append("tomli-w")
 
     if programming_language.lower() == "python":
         install_packages.extend(["jupyterlab", "pytest"])
@@ -500,13 +478,19 @@ def exe_to_env(executable: str = None, path: str = None, env_file: str = ".env")
         return False
 
 
-def is_installed(executable: str = None, name: str = None):
+def is_installed(executable: str = None, name: str = None, local_install: bool = False):
     if name is None:
         name = executable
 
-    # Check if both executable and name are provided as strings
-    if not isinstance(executable, str) or not isinstance(name, str):
-        raise ValueError("Both 'executable' and 'name' must be strings.")
+    # Check if executable and name are provided as strings and local_install is bool
+    if (
+        not isinstance(executable, str)
+        or not isinstance(name, str)
+        or not isinstance(local_install, bool)
+    ):
+        raise ValueError(
+            "'executable' and 'name' must be strings and 'local_install' must be bool."
+        )
 
     path = load_from_env(executable)
     if path:
@@ -516,6 +500,32 @@ def is_installed(executable: str = None, name: str = None):
         return exe_to_path(executable, path)
     elif path and not os.path.exists(path):
         remove_from_env(path)
+
+    if local_install:
+        os_type = platform.system().lower()
+        executable_names = [executable]
+
+        if os_type == "windows":
+            for ext in (".exe", ".bat", ".cmd"):
+                if not executable.lower().endswith(ext):
+                    executable_names.append(f"{executable}{ext}")
+
+        local_candidates = []
+        for exe_name in executable_names:
+            local_candidates.extend(
+                [
+                    PROJECT_ROOT / exe_name,
+                    PROJECT_ROOT / "bin" / exe_name,
+                    PROJECT_ROOT / ".venv" / "Scripts" / exe_name,
+                    PROJECT_ROOT / ".venv" / "bin" / exe_name,
+                    PROJECT_ROOT / ".conda" / "Scripts" / exe_name,
+                    PROJECT_ROOT / ".conda" / "bin" / exe_name,
+                ]
+            )
+
+        for candidate in local_candidates:
+            if candidate.exists():
+                return exe_to_path(executable, str(candidate.parent))
 
     if shutil.which(executable):
         return exe_to_path(executable, os.path.dirname(shutil.which(executable)))

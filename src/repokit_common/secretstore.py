@@ -28,6 +28,11 @@ else:
 
 from dotenv import dotenv_values, load_dotenv
 
+try:
+    import tomlkit
+except Exception:
+    tomlkit = None
+
 
 # --- Helpers for secret management ---
 def _slugify(s: str | None) -> str:
@@ -88,6 +93,44 @@ def _keyring_set(name: str, value: str) -> bool:
             keyring.set_password(_secret_service_name(), name, value)
         return True
     except (KeyringError, NoKeyringError):
+        return False
+
+
+def _write_tool_value_with_tomlkit(
+    toml_path: pathlib.Path,
+    section: str,
+    key: str,
+    value: str,
+) -> bool:
+    """
+    Update [tool.<section>.<key>] in TOML while preserving comments/formatting.
+    Returns True on success, False if unavailable or failed.
+    """
+    if tomlkit is None:
+        return False
+
+    try:
+        if toml_path.exists():
+            text = toml_path.read_text(encoding="utf-8")
+            doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
+        else:
+            doc = tomlkit.document()
+
+        tool_table = doc.get("tool")
+        if not isinstance(tool_table, dict):
+            tool_table = tomlkit.table()
+            doc["tool"] = tool_table
+
+        section_table = tool_table.get(section)
+        if not isinstance(section_table, dict):
+            section_table = tomlkit.table()
+            tool_table[section] = section_table
+
+        section_table[key] = value
+        toml_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        return True
+    except Exception as e:
+        print(f"Failed to preserve TOML comments with tomlkit: {e}")
         return False
 
 
@@ -241,6 +284,10 @@ def save_to_env(
     toml_path = pathlib.Path(toml_file)
     if not toml_path.is_absolute():
         toml_path = PROJECT_ROOT / toml_path.name
+
+    # Prefer comment-preserving writes when tomlkit is available.
+    if _write_tool_value_with_tomlkit(toml_path, toml_section, name_strip, env_var):
+        return
 
     config = {}
     if toml_path.exists():
