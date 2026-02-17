@@ -503,6 +503,103 @@ def exe_to_env(executable: str = None, path: str = None, env_file: str = ".env")
         return False
 
 
+def _candidate_executable_names(executable: str) -> list[str]:
+    names = [executable]
+    if platform.system().lower() == "windows":
+        for ext in (".exe", ".bat", ".cmd"):
+            if not executable.lower().endswith(ext):
+                names.append(f"{executable}{ext}")
+    return names
+
+
+def _is_within_root(path: pathlib.Path, root: pathlib.Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _find_executable_in_root(root: pathlib.Path, names: list[str]) -> pathlib.Path | None:
+    if not root.exists():
+        return None
+    for n in names:
+        p = root / n
+        if p.is_file():
+            return p.resolve()
+    for n in names:
+        try:
+            for p in root.rglob(n):
+                if p.is_file():
+                    return p.resolve()
+        except OSError:
+            pass
+    return None
+
+
+def _resolve_from_config_or_path(executable: str, names: list[str]) -> pathlib.Path | None:
+    configured = load_from_env(executable)
+    if configured:
+        p = pathlib.Path(configured).resolve()
+        if p.exists():
+            if p.is_file() and p.name in names:
+                return p
+            if p.is_dir():
+                return _find_executable_in_root(p, names)
+    resolved = shutil.which(executable)
+    return pathlib.Path(resolved).resolve() if resolved else None
+
+
+def resolve_executable(executable: str, local_path: str | None = None) -> pathlib.Path | None:
+    """
+    Resolve executable path.
+    - If local_path is provided, only return paths under that local root.
+    - Otherwise resolve from configured env path first, then PATH.
+    """
+    names = _candidate_executable_names(executable)
+
+    if local_path is not None:
+        local_root = pathlib.Path(local_path)
+        if not local_root.is_absolute():
+            local_root = PROJECT_ROOT / local_root
+        local_root = local_root.resolve()
+
+        configured = load_from_env(executable)
+        if configured:
+            p = pathlib.Path(configured).resolve()
+            if p.exists() and _is_within_root(p, local_root):
+                if p.is_file() and p.name in names:
+                    return p
+                if p.is_dir():
+                    m = _find_executable_in_root(p, names)
+                    if m:
+                        return m
+
+        local_match = _find_executable_in_root(local_root, names)
+        if local_match:
+            return local_match
+
+        which_match = shutil.which(executable)
+        if which_match:
+            p = pathlib.Path(which_match).resolve()
+            if _is_within_root(p, local_root):
+                return p
+        return None
+
+    return _resolve_from_config_or_path(executable, names)
+
+
+def persist_executable_path(executable: str, executable_path: pathlib.Path) -> bool:
+    """
+    Persist executable directory to .env and process environment.
+    """
+    p = executable_path.resolve()
+    pdir = p.parent if p.is_file() else p
+    save_to_env(str(pdir), executable.upper())
+    os.environ[executable.upper()] = str(pdir)
+    return True
+
+
 def is_installed(
     executable: str = None,
     name: str = None,
@@ -520,128 +617,11 @@ def is_installed(
             "'executable' and 'name' must be strings; 'local_path' must be string or None."
         )
 
-    def _exe_names(exe: str) -> list[str]:
-        names = [exe]
-        if platform.system().lower() == "windows":
-            for ext in (".exe", ".bat", ".cmd"):
-                if not exe.lower().endswith(ext):
-                    names.append(f"{exe}{ext}")
-        return names
-
-    def _find_exe(root: pathlib.Path, exe_names: list[str]) -> pathlib.Path | None:
-        if not root.exists():
-            return None
-        for n in exe_names:
-            p = root / n
-            if p.is_file():
-                return p.resolve()
-        for n in exe_names:
-            try:
-                for p in root.rglob(n):
-                    if p.is_file():
-                        return p.resolve()
-            except OSError:
-                pass
-        return None
-
-    path = load_from_env(executable)
-    path_obj = pathlib.Path(path).resolve() if path else None
-
-    if local_path is not None:
-        local_root = pathlib.Path(local_path)
-        if not local_root.is_absolute():
-            local_root = PROJECT_ROOT / local_root
-        local_root = local_root.resolve()
-        names = _exe_names(executable)
-
-        if path_obj and path_obj.exists():
-            try:
-                path_obj.relative_to(local_root)
-                if path_obj.is_file() and path_obj.name in names:
-                    return exe_to_path(executable, str(path_obj.parent))
-                if path_obj.is_dir():
-                    m = _find_exe(path_obj, names)
-                    if m:
-                        return exe_to_path(executable, str(m.parent))
-            except ValueError:
-                pass
-
-        m = _find_exe(local_root, names)
-        if m:
-            return exe_to_path(executable, str(m.parent))
-
-        resolved = shutil.which(executable)
-        if resolved:
-            rp = pathlib.Path(resolved).resolve()
-            try:
-                rp.relative_to(local_root)
-                return exe_to_path(executable, str(rp.parent))
-            except ValueError:
-                pass
-
-        return False
-
-    if path_obj and path_obj.exists():
-        pdir = path_obj.parent if path_obj.is_file() else path_obj
-        return exe_to_path(executable, str(pdir))
-    elif path_obj and not path_obj.exists():
-        remove_from_env(str(path_obj))
-
-    resolved = shutil.which(executable)
-    if resolved:
-        return exe_to_path(executable, str(pathlib.Path(resolved).resolve().parent))
-
-    print(f"{name} is not on Path")
-    return False
-
-
-def is_installed_old(
-    executable: str = None,
-    name: str = None,
-    local_path: str | None = None,
-):
-    if name is None:
-        name = executable
-
-    # Validate input types.
-    if (
-        not isinstance(executable, str)
-        or not isinstance(name, str)
-        or (local_path is not None and not isinstance(local_path, str))
-    ):
-        raise ValueError(
-            "'executable' and 'name' must be strings; 'local_path' must be string or None."
-        )
-
-    path = load_from_env(executable)
-
-    if path:
-        path = os.path.abspath(path)
-   
-    if path and os.path.exists(path) and local_path is not None:    
-            
-        local_root = pathlib.Path(local_path)
-        if not local_root.is_absolute():
-            local_root = PROJECT_ROOT / local_root
-
-        exe_path = pathlib.Path(path).resolve()
-        root = local_root.resolve()
-
-        try:
-            exe_path.relative_to(root)
-        except ValueError:
-            path = None
-
-    if path and os.path.exists(path):
-        return exe_to_path(executable, path)
-    elif path and not os.path.exists(path):
-        remove_from_env(path)
-
-    if shutil.which(executable):
-        return exe_to_path(executable, os.path.dirname(shutil.which(executable)))
-    else:
+    resolved = resolve_executable(executable=executable, local_path=local_path)
+    if resolved is None:
         print(f"{name} is not on Path")
         return False
+    return persist_executable_path(executable, resolved)
 
 
 def get_version(programming_language):
