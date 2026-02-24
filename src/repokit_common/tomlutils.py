@@ -324,7 +324,7 @@ def toml_dataset_path(
                 first_pattern = s
 
     if not first_pattern:
-        first_pattern = str(PROJECT_ROOT / "/data/*")
+        first_pattern = "data/*"
 
     # Write back
     write_toml(
