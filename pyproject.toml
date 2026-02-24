@@ -51,6 +51,9 @@ dev = [
     "mypy>=1.10",
     "uv",
 ]
+secrets = [
+    "keyring",
+]
 
 [tool.ruff]
 line-length = 100
