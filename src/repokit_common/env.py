@@ -2,13 +2,9 @@ import importlib.metadata
 import importlib.util
 import os
 import pathlib
-import platform
-import shutil
 import subprocess
 import sys
 from functools import wraps
-from dotenv import load_dotenv
-import ctypes
 
 try:
     import winreg  # type: ignore[attr-defined]
@@ -26,6 +22,8 @@ else:
 
 from .base import PROJECT_ROOT, install_uv
 from .paths import check_path_format, get_relative_path
+from .executables import is_installed
+from .env_paths import exe_to_env, exe_to_path, remove_from_env
 from .secretstore import load_from_env, save_to_env
 
 try:
@@ -245,383 +243,30 @@ def package_installer(required_libraries: list = None):
             print(f"❌ Failed to install {lib} with pip: {e}")
 
 
-def _win_add_to_user_path(path: str) -> bool:
-    r"""Add `path` to the current user's PATH via HKCU\Environment, de-duplicated.
-    Broadcasts WM_SETTINGCHANGE so new processes see it."""
-    reg_key = r"Environment"
-    # Read current PATH and type (REG_SZ or REG_EXPAND_SZ)
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key, 0, winreg.KEY_READ) as k:
-            try:
-                cur, reg_type = winreg.QueryValueEx(k, "Path")
-            except FileNotFoundError:
-                cur, reg_type = "", winreg.REG_EXPAND_SZ
-    except OSError as e:
-        print(f"Failed to open registry for read: {e}")
-        return False
-
-    parts = [p for p in cur.split(";") if p]
-    new_norm = os.path.normcase(os.path.normpath(path))
-    if not any(os.path.normcase(os.path.normpath(p)) == new_norm for p in parts):
-        parts.append(path)
-        new_val = ";".join(parts)
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key, 0, winreg.KEY_SET_VALUE) as k:
-                winreg.SetValueEx(k, "Path", 0, reg_type, new_val)
-        except OSError as e:
-            print(f"Failed to write PATH in registry: {e}")
-            return False
-
-        # Notify the system that env vars changed (future processes pick it up)
-        HWND_BROADCAST = 0xFFFF
-        WM_SETTINGCHANGE = 0x001A
-        SMTO_ABORTIFHUNG = 0x0002
-        ctypes.windll.user32.SendMessageTimeoutW(
-            HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 5000, None
-        )
-    return True
 
 
-def exe_to_path(executable: str = None, path: str = None, env_file: str = ".env"):
-    """
-    Adds the path of an executable binary to the system PATH permanently.
-    """
-    env_file = pathlib.Path(env_file)
-    if not env_file.exists():
-        env_file = PROJECT_ROOT / env_file.name
-
-    # Ensure it's an absolute path
-    path = os.path.abspath(path)
-
-    os_type = platform.system().lower()
-
-    if not executable or not path:
-        print("Executable and path must be provided.")
-        return False
-
-    if os.path.exists(path):
-        # Add to current session PATH
-        os.environ["PATH"] += os.pathsep + path
-
-        if os_type == "windows":
-            # Use setx to set the environment variable permanently in Windows
-            _win_add_to_user_path(path)
-            # subprocess.run(["setx", "PATH", f"{path};%PATH%"], check=True)
-        else:
-            # On macOS/Linux, add the path to the shell profile file
-            profile_file = os.path.expanduser("~/.bashrc")  # or ~/.zshrc depending on the shell
-            with open(profile_file, "a") as file:
-                file.write(f'\nexport PATH="{path}:$PATH"')
-            # Immediately apply the change for the current script/session (only works if you're in a shell)
-            subprocess.run(f"source {profile_file}", shell=True, executable="/bin/bash")
-
-        # Check if executable is found in the specified path
-        resolved_path = shutil.which(executable)
-
-        if resolved_path:
-            resolved_path = os.path.abspath(resolved_path)
-            resolved_path = os.path.dirname(resolved_path)
-
-        if resolved_path == path:
-            print(f"{executable} binary is added to PATH and resolved correctly: {path}")
-            path = get_relative_path(path)
-            save_to_env(path, executable.upper())
-            load_dotenv(env_file, override=True)
-            return True
-        elif resolved_path:
-            print(f"{executable} binary available at a wrong path: {resolved_path}")
-            print(f"Instead of: {path}")
-            resolved_path = get_relative_path(resolved_path)
-            save_to_env(resolved_path, executable.upper())
-            load_dotenv(env_file, override=True)
-            return True
-        else:
-            print(f"{executable} binary is not found in the specified PATH: {path}")
-            return False
-    else:
-        print(f"{executable}: path does not exist: {path}")
-        return False
 
 
-def _norm_for_compare(p: str) -> str:
-    # normalize for robust equality (case-insensitive, no trailing slash, expand %VARS%)
-    p = p.strip().strip('"')
-    p = os.path.expandvars(p)
-    p = os.path.normpath(p).rstrip("\\/")
-    return os.path.normcase(p)
 
 
-def _win_remove_from_user_path(path: str) -> bool:
-    r"""Remove `path` from the current user's PATH (HKCU\\Environment), de-duplicated.
-    Broadcasts WM_SETTINGCHANGE so new processes see it, and updates this process' PATH."""
-    if os.name != "nt" or winreg is None:
-        print("Not on Windows; skipping registry PATH update.")
-        return False
-
-    reg_key = r"Environment"
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key, 0, winreg.KEY_READ) as k:
-            try:
-                cur, reg_type = winreg.QueryValueEx(k, "Path")
-            except FileNotFoundError:
-                # Nothing to remove
-                return True
-    except OSError as e:
-        print(f"Failed to open HKCU\\{reg_key} for read: {e}")
-        return False
-
-    target = _norm_for_compare(path)
-    parts = [p for p in cur.split(";") if p]  # keep original text for survivors
-    kept = [p for p in parts if _norm_for_compare(p) != target]
-
-    if kept == parts:
-        # Already absent
-        return True
-
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key, 0, winreg.KEY_SET_VALUE) as k:
-            if kept:
-                winreg.SetValueEx(k, "Path", 0, reg_type, ";".join(kept))
-            else:
-                # Optional: delete the value if empty
-                try:
-                    winreg.DeleteValue(k, "Path")
-                except FileNotFoundError:
-                    pass
-    except OSError as e:
-        print(f"Failed to write user PATH: {e}")
-        return False
-
-    # Notify system so **new** processes pick up the change
-    HWND_BROADCAST = 0xFFFF
-    WM_SETTINGCHANGE = 0x001A
-    SMTO_ABORTIFHUNG = 0x0002
-    ctypes.windll.user32.SendMessageTimeoutW(
-        HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 5000, None
-    )
-
-    # Update this Python process' PATH too
-    cur_parts = [p for p in os.environ.get("PATH", "").split(";") if p]
-    os.environ["PATH"] = ";".join([p for p in cur_parts if _norm_for_compare(p) != target])
-
-    print(f"Path {path} removed permanently for the current user.")
-    return True
 
 
-def remove_from_env(path: str):
-    """
-    Removes a specific path from the system PATH for the current session and permanently if applicable.
-
-    Args:
-        path (str): The path to remove from the PATH environment variable.
-
-    Returns
-    -------
-        bool: True if the path was successfully removed, False otherwise.
-    """
-    if not path:
-        print("No path provided to remove.")
-        return False
-
-    # Normalize the path for comparison
-    path = os.path.normpath(path)
-
-    # Split the current PATH into a list
-    current_paths = os.environ["PATH"].split(os.pathsep)
-
-    # Remove the specified path
-    filtered_paths = [p for p in current_paths if os.path.normpath(p) != path]
-    os.environ["PATH"] = os.pathsep.join(filtered_paths)
-
-    # Update PATH permanently
-    os_type = platform.system().lower()
-    if os_type == "windows":
-        # Use setx to update PATH permanently on Windows
-        try:
-            _win_remove_from_user_path(path)
-            # subprocess.run(["setx", "PATH", os.environ["PATH"]], check=True)
-            print(f"Path {path} removed permanently on Windows.")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to update PATH permanently on Windows: {e}")
-            return False
-    else:
-        # On macOS/Linux, remove the path from the shell profile file
-        profile_file = os.path.expanduser("~/.bashrc")  # or ~/.zshrc depending on the shell
-        if os.path.exists(profile_file):
-            try:
-                with open(profile_file) as file:
-                    lines = file.readlines()
-                with open(profile_file, "w") as file:
-                    for line in lines:
-                        if f'export PATH="{path}:$PATH"' not in line.strip():
-                            file.write(line)
-                print(f"Path {path} removed permanently in {profile_file}.")
-            except Exception as e:
-                print(f"Failed to update {profile_file}: {e}")
-                return False
-    return True
 
 
-def exe_to_env(executable: str = None, path: str = None, env_file: str = ".env"):
-    """
-    Adds the path of an executable binary to an environment file.
-    """
-    env_file = pathlib.Path(env_file)
-    if not env_file.exists():
-        env_file = PROJECT_ROOT / env_file.name
-
-    if not executable:
-        print("Executable must be provided.")
-        return False
-
-    # Attempt to resolve path if not provided
-    if not path or not os.path.exists(path):
-        path = os.path.dirname(shutil.which(executable))
-
-    if path:
-        # Save to environment file
-        save_to_env(path, executable.upper())  # Assuming `save_to_env` is defined elsewhere
-        load_dotenv(env_file, override=True)
-
-        # Check if executable is found in the specified path
-        resolved_path = shutil.which(executable)
-        if resolved_path and os.path.dirname(resolved_path) == path:
-            print(f"{executable} binary is added to the environment and resolved correctly: {path}")
-            save_to_env(path, executable.upper())  # Assuming `save_to_env` is defined elsewhere
-            load_dotenv(env_file, override=True)
-            return True
-        elif resolved_path:
-            print(f"{executable} binary available at a wrong path: {resolved_path}")
-            save_to_env(os.path.dirname(resolved_path), executable.upper())
-            load_dotenv(env_file, override=True)
-            return True
-        else:
-            print(f"{executable} binary is not found in the specified environment PATH: {path}")
-            return False
-    else:
-        print(f"{executable}:path does not exist: {path}")
-        return False
 
 
-def _candidate_executable_names(executable: str) -> list[str]:
-    names = [executable]
-    if platform.system().lower() == "windows":
-        for ext in (".exe", ".bat", ".cmd"):
-            if not executable.lower().endswith(ext):
-                names.append(f"{executable}{ext}")
-    return names
 
 
-def _is_within_root(path: pathlib.Path, root: pathlib.Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
 
 
-def _find_executable_in_root(root: pathlib.Path, names: list[str]) -> pathlib.Path | None:
-    if not root.exists():
-        return None
-    for n in names:
-        p = root / n
-        if p.is_file():
-            return p.resolve()
-    for n in names:
-        try:
-            for p in root.rglob(n):
-                if p.is_file():
-                    return p.resolve()
-        except OSError:
-            pass
-    return None
 
 
-def _resolve_from_config_or_path(executable: str, names: list[str]) -> pathlib.Path | None:
-    configured = load_from_env(executable)
-    if configured:
-        p = pathlib.Path(configured).resolve()
-        if p.exists():
-            if p.is_file() and p.name in names:
-                return p
-            if p.is_dir():
-                return _find_executable_in_root(p, names)
-    resolved = shutil.which(executable)
-    return pathlib.Path(resolved).resolve() if resolved else None
 
 
-def resolve_executable(executable: str, local_path: str | None = None) -> pathlib.Path | None:
-    """
-    Resolve executable path.
-    - If local_path is provided, only return paths under that local root.
-    - Otherwise resolve from configured env path first, then PATH.
-    """
-    names = _candidate_executable_names(executable)
-
-    if local_path is not None:
-        local_root = pathlib.Path(local_path)
-        if not local_root.is_absolute():
-            local_root = PROJECT_ROOT / local_root
-        local_root = local_root.resolve()
-
-        configured = load_from_env(executable)
-        if configured:
-            p = pathlib.Path(configured).resolve()
-            if p.exists() and _is_within_root(p, local_root):
-                if p.is_file() and p.name in names:
-                    return p
-                if p.is_dir():
-                    m = _find_executable_in_root(p, names)
-                    if m:
-                        return m
-
-        local_match = _find_executable_in_root(local_root, names)
-        if local_match:
-            return local_match
-
-        which_match = shutil.which(executable)
-        if which_match:
-            p = pathlib.Path(which_match).resolve()
-            if _is_within_root(p, local_root):
-                return p
-        return None
-
-    return _resolve_from_config_or_path(executable, names)
 
 
-def persist_executable_path(executable: str, executable_path: pathlib.Path) -> bool:
-    """
-    Persist executable directory to .env and process environment.
-    """
-    p = executable_path.resolve()
-    pdir = p.parent if p.is_file() else p
-    save_to_env(str(pdir), executable.upper())
-    os.environ[executable.upper()] = str(pdir)
-    return True
 
 
-def is_installed(
-    executable: str = None,
-    name: str = None,
-    local_path: str | None = None,
-):
-    if name is None:
-        name = executable
-
-    if (
-        not isinstance(executable, str)
-        or not isinstance(name, str)
-        or (local_path is not None and not isinstance(local_path, str))
-    ):
-        raise ValueError(
-            "'executable' and 'name' must be strings; 'local_path' must be string or None."
-        )
-
-    resolved = resolve_executable(executable=executable, local_path=local_path)
-    if resolved is None:
-        print(f"{name} is not on Path")
-        return False
-    return persist_executable_path(executable, resolved)
 
 
 def get_version(programming_language):
