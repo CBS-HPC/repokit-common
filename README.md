@@ -13,13 +13,7 @@ Shared utilities used across the **repokit** ecosystem. This package is intentio
 
 ## Installation
 
-> Note: `repokit-common` is not published on PyPI yet. Use local wheel/source installation for now.
-
-Install from PyPI:
-
-```bash
-pip install repokit-common
-```
+`repokit-common` is not published on PyPI yet. Use local wheel/source installation.
 
 Install from local wheel files (`/dist`):
 
