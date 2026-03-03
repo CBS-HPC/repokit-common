@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 BASE_DEPS = [
@@ -12,6 +13,17 @@ BASE_DEPS = [
     'toml>=0.10 ; python_version < "3.11"',
     'tomli-w>=1.0 ; python_version >= "3.11"',
 ]
+
+DEFAULT_PROJECT_ROOT_MARKERS = {
+    "activate.ps1",
+    "activate.sh",
+    "deactivate.ps1",
+    "deactivate.sh",
+    "pyproject.toml",
+    "dmp.json",
+    ".venv",
+    ".conda",
+}
 
 
 def install_uv():
@@ -69,27 +81,20 @@ def install_base_deps(deps: list[str] = BASE_DEPS) -> None:
             pass
 
 
-def _find_project_root_from_cwd() -> Path | None:
+def _find_project_root_from_cwd(extra_markers: Iterable[str] | None = None) -> Path | None:
     cwd = Path.cwd().resolve()
-    markers = {
-        "activate.ps1",
-        "activate.sh",
-        "deactivate.ps1",
-        "deactivate.sh",
-        "pyproject.toml",
-        "dmp.json",
-        ".venv",
-        ".conda",
-    }
+    markers = set(DEFAULT_PROJECT_ROOT_MARKERS)
+    if extra_markers:
+        markers.update({str(marker).strip() for marker in extra_markers if str(marker).strip()})
     for p in (cwd, *cwd.parents):
         if any((p / m).exists() for m in markers):
             return p
     return None
 
 
-def project_root() -> Path:
+def project_root(extra_markers: Iterable[str] | None = None) -> Path:
     # 1) cwd-based marker detection (works for non-editable installs)
-    cwd_root = _find_project_root_from_cwd()
+    cwd_root = _find_project_root_from_cwd(extra_markers=extra_markers)
     if cwd_root:
         return cwd_root
 
