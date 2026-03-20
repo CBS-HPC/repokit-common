@@ -13,20 +13,12 @@ try:
 except ImportError:
     winreg = None  # Not Windows
 
-
-if sys.version_info < (3, 11):
-    import toml
-
-    tomli_w = None
-else:
-    import tomli_w
-    import tomllib as toml
-
 from .base import PROJECT_ROOT, install_uv
 from .paths import check_path_format, get_relative_path
 from .executables import is_installed
 from .env_paths import exe_to_env, exe_to_path, remove_from_env
 from .secretstore import load_from_env, save_to_env
+from .toml_compat import dumps_toml, load_toml_path, read_toml_text
 
 try:
     import tomlkit
@@ -47,45 +39,28 @@ def create_uv_project():
     env["UV_LINK_MODE"] = "copy"
 
     if uv_lock_path.exists():
-        print("✔️  uv.lock already exists — skipping `uv init` or `uv lock`.")
+        print("[INFO] uv.lock already exists - skipping `uv init` or `uv lock`.")
         return
 
     if not install_uv():
-        print("❌ 'uv' is not installed or not available in PATH.")
+        print("[ERROR] 'uv' is not installed or not available in PATH.")
         return
 
     try:
         if pyproject_path.exists():
-            print("✅ pyproject.toml found — running `uv lock`...")
+            print("[INFO] pyproject.toml found - running `uv lock`...")
             subprocess.run(["uv", "lock"], check=True, env=env, cwd=project_path)
         else:
-            print("No pyproject.toml found — running `uv init`...")
+            print("[INFO] No pyproject.toml found - running `uv init`...")
             subprocess.run(["uv", "init"], check=True, env=env, cwd=project_path)
     except subprocess.CalledProcessError as e:
-        print(f"❌ Command failed: {e}")
+        print(f"[ERROR] Command failed: {e}")
 
 
 def write_uv_requires(toml_file: str = "pyproject.toml"):
     """Writes 'project.requires-python = >=<version>' to the given pyproject.toml."""
     version_str = subprocess.check_output([sys.executable, "--version"]).decode().strip().split()[1]
     requires = f">= {version_str}"
-
-    # TOML loading/dumping
-    if sys.version_info < (3, 11):
-        load_toml = toml.load
-        dump_toml = toml.dump
-        read_mode = ("r", "utf-8")
-        write_mode = ("w", "utf-8")
-    else:
-
-        def load_toml(f):
-            return toml.load(f)
-
-        def dump_toml(d, f):
-            f.write(tomli_w.dumps(d))
-
-        read_mode = ("rb", None)
-        write_mode = ("w", "utf-8")
 
     path = pathlib.Path(toml_file)
     if not path.is_absolute():
@@ -95,7 +70,7 @@ def write_uv_requires(toml_file: str = "pyproject.toml"):
     if tomlkit is not None:
         try:
             if path.exists():
-                text = path.read_text(encoding="utf-8")
+                text = read_toml_text(path)
                 config_doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
             else:
                 config_doc = tomlkit.document()
@@ -111,16 +86,12 @@ def write_uv_requires(toml_file: str = "pyproject.toml"):
         except Exception as e:
             print(f"Could not preserve TOML comments with tomlkit: {e}")
 
-    config = {}
-    if path.exists():
-        with open(path, read_mode[0], encoding=read_mode[1]) as f:
-            config = load_toml(f)
+    config = load_toml_path(path) if path.exists() else {}
 
     config.setdefault("project", {})
     config["project"]["requires-python"] = requires
 
-    with open(path, write_mode[0], encoding=write_mode[1]) as f:
-        dump_toml(config, f)
+    path.write_text(dumps_toml(config), encoding="utf-8")
 
 
 def set_packages(version_control, programming_language):
@@ -149,7 +120,7 @@ def set_packages(version_control, programming_language):
 def package_installer(required_libraries: list = None):
     """
     Install missing libraries using uv if available, otherwise fallback to pip.
-    Preference order: uv add → uv pip install → pip install
+    Preference order: uv add -> uv pip install -> pip install
     """
 
     def safe_uv_add(lib, project_root):
@@ -207,7 +178,7 @@ def package_installer(required_libraries: list = None):
             if (name := dist.metadata.get("Name")) is not None
         }
     except Exception as e:
-        print(f"⚠️ Error checking installed packages: {e}")
+        print(f"[WARN] Error checking installed packages: {e}")
         return
 
     # Normalize names and find missing ones
@@ -221,7 +192,7 @@ def package_installer(required_libraries: list = None):
     if not missing_libraries:
         return
 
-    # print(f"📦 Installing missing libraries: {missing_libraries}")
+    # print(f"Installing missing libraries: {missing_libraries}")
 
     uv_available = install_uv()
     try:
@@ -242,7 +213,7 @@ def package_installer(required_libraries: list = None):
                 [sys.executable, "-m", "pip", "install", lib], check=True, stderr=subprocess.DEVNULL
             )
         except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to install {lib} with pip: {e}")
+            print(f"[ERROR] Failed to install {lib} with pip: {e}")
 
 
 

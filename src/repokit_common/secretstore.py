@@ -2,7 +2,6 @@ import os
 import pathlib
 import re
 import subprocess
-import sys
 
 # ---- Secret manager (optional) ----
 try:
@@ -17,14 +16,7 @@ except Exception:
 
 from .base import PROJECT_ROOT
 from .paths import check_path_format
-
-if sys.version_info < (3, 11):
-    import toml
-
-    tomli_w = None
-else:
-    import tomli_w
-    import tomllib as toml
+from .toml_compat import dumps_toml, load_toml_path, read_toml_text
 
 from dotenv import dotenv_values, load_dotenv
 
@@ -111,7 +103,7 @@ def _write_tool_value_with_tomlkit(
 
     try:
         if toml_path.exists():
-            text = toml_path.read_text(encoding="utf-8")
+            text = read_toml_text(toml_path)
             doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
         else:
             doc = tomlkit.document()
@@ -148,11 +140,6 @@ def load_from_env(
       4) [tool.<section>] in TOML fallback (pyproject.toml)
     Returns None if not found.
     """
-    if sys.version_info < (3, 11):
-        open_mode = ("r", "utf-8")
-    else:
-        open_mode = ("rb", None)
-
     name_strip = env_name.strip()
     name_upper = name_strip.upper()
 
@@ -190,11 +177,10 @@ def load_from_env(
 
     if toml_path.exists():
         try:
-            with open(toml_path, open_mode[0], encoding=open_mode[1]) as f:
-                config = toml.load(f)
+            config = load_toml_path(toml_path)
             return check_path_format(config.get("tool", {}).get(toml_section, {}).get(name_strip))
         except Exception as e:
-            print(f"⚠️ Could not read {toml_path}: {e}")
+            print(f"[WARN] Could not read {toml_path}: {e}")
 
     return None
 
@@ -217,22 +203,6 @@ def save_to_env(
 
     def sanitize_input(s: str) -> str:
         return s.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="ignore")
-
-    if sys.version_info < (3, 11):
-        load_toml = toml.load
-        dump_toml = toml.dump
-        read_mode = ("r", "utf-8")
-        write_mode = ("w", "utf-8")
-    else:
-
-        def load_toml(f):
-            return toml.load(f)
-
-        def dump_toml(d, f):
-            f.write(tomli_w.dumps(d))  # type: ignore
-
-        read_mode = ("rb", None)
-        write_mode = ("w", "utf-8")
 
     if env_var is None:
         return
@@ -292,15 +262,13 @@ def save_to_env(
     config = {}
     if toml_path.exists():
         try:
-            with open(toml_path, read_mode[0], encoding=read_mode[1]) as f:
-                config = load_toml(f)
+            config = load_toml_path(toml_path)
         except Exception as e:
-            print(f"⚠️ Could not parse TOML: {e}")
+            print(f"[WARN] Could not parse TOML: {e}")
             return
 
     config.setdefault("tool", {})
     config["tool"].setdefault(toml_section, {})
     config["tool"][toml_section][name_strip] = env_var
 
-    with open(toml_path, write_mode[0], encoding=write_mode[1]) as f:
-        dump_toml(config, f)
+    toml_path.write_text(dumps_toml(config), encoding="utf-8")

@@ -1,6 +1,5 @@
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Optional, Union
 
@@ -8,6 +7,7 @@ import pathspec
 from pathspec.patterns import GitWildMatchPattern
 
 from .base import PROJECT_ROOT
+from .toml_compat import dumps_toml, load_toml_path, read_toml_text
 
 JSON_FILENAME = "cookiecutter.json"
 TOOL_NAME = "cookiecutter"
@@ -17,30 +17,6 @@ try:
     import tomlkit
 except Exception:
     tomlkit = None
-
-if sys.version_info < (3, 11):
-    import toml
-
-    tomli_w = None
-    OPEN_MODE = ("r", "utf-8")
-    load_toml = toml.load
-    dump_toml = toml.dump
-    READ_MODE = ("r", "utf-8")
-    WRITE_MODE = ("w", "utf-8")
-else:
-    import tomli_w
-    import tomllib as toml
-
-    OPEN_MODE = ("rb", None)
-
-    def load_toml(f):
-        return toml.load(f)
-
-    def dump_toml(d, f):
-        f.write(tomli_w.dumps(d))
-
-    READ_MODE = ("rb", None)
-    WRITE_MODE = ("w", "utf-8")
 
 
 def _write_tool_section_with_tomlkit(
@@ -57,7 +33,7 @@ def _write_tool_section_with_tomlkit(
 
     try:
         if os.path.exists(toml_file_path):
-            text = Path(toml_file_path).read_text(encoding="utf-8")
+            text = read_toml_text(toml_file_path)
             doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
         else:
             doc = tomlkit.document()
@@ -99,13 +75,15 @@ def toml_ignore(
     if not folder:
         folder = str(PROJECT_ROOT)
 
-    ignore_path = (
-        ignore_filename
-        if os.path.isabs(ignore_filename or "")
-        else os.path.join(folder, ignore_filename or "")
-    )
+    ignore_path = None
+    if ignore_filename:
+        ignore_path = (
+            ignore_filename
+            if os.path.isabs(ignore_filename)
+            else os.path.join(folder, ignore_filename)
+        )
 
-    if ignore_filename and os.path.exists(ignore_path):
+    if ignore_path and os.path.exists(ignore_path):
         with open(ignore_path, encoding="utf-8") as f:
             patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         spec = pathspec.PathSpec.from_lines(GitWildMatchPattern, patterns)
@@ -114,8 +92,7 @@ def toml_ignore(
     toml_full_path = toml_path if os.path.isabs(toml_path) else os.path.join(folder, toml_path)
     if os.path.exists(toml_full_path):
         try:
-            with open(toml_full_path, OPEN_MODE[0], encoding=OPEN_MODE[1]) as f:
-                config = toml.load(f)
+            config = load_toml_path(toml_full_path)
             patterns = config.get("tool", {}).get(tool_name) or config.get(tool_name)
             if isinstance(patterns, dict):
                 patterns = patterns.get(toml_key, [])
@@ -152,12 +129,14 @@ def read_toml(
     if not folder:
         folder = str(PROJECT_ROOT)
 
-    json_path = (
-        json_filename
-        if os.path.isabs(json_filename or "")
-        else os.path.join(folder, json_filename or "")
-    )
-    if os.path.exists(json_path):
+    json_path = None
+    if json_filename:
+        json_path = (
+            json_filename
+            if os.path.isabs(json_filename)
+            else os.path.join(folder, json_filename)
+        )
+    if json_path and os.path.exists(json_path):
         try:
             with open(json_path, encoding="utf-8") as f:
                 return json.load(f)
@@ -167,8 +146,7 @@ def read_toml(
     toml_path_full = toml_path if os.path.isabs(toml_path) else os.path.join(folder, toml_path)
     if os.path.exists(toml_path_full):
         try:
-            with open(toml_path_full, OPEN_MODE[0], encoding=OPEN_MODE[1]) as f:
-                config = toml.load(f)
+            config = load_toml_path(toml_path_full)
             return config.get("tool", {}).get(tool_name) or config.get(tool_name)
         except Exception as e:
             print(f"Error reading [{tool_name}] from {toml_path_full}: {e}")
@@ -214,12 +192,11 @@ def write_toml(
 
     toml_data = {}
     if os.path.exists(toml_file_path):
-        with open(toml_file_path, READ_MODE[0], encoding=READ_MODE[1]) as f:
-            try:
-                toml_data = load_toml(f)
-            except Exception as e:
-                print(f"Failed to parse existing TOML: {e}")
-                return
+        try:
+            toml_data = load_toml_path(toml_file_path)
+        except Exception as e:
+            print(f"Failed to parse existing TOML: {e}")
+            return
 
     if "tool" not in toml_data:
         toml_data["tool"] = {}
@@ -228,8 +205,7 @@ def write_toml(
 
     toml_data["tool"][tool_name].update(data)
 
-    with open(toml_file_path, WRITE_MODE[0], encoding=WRITE_MODE[1]) as f:
-        dump_toml(toml_data, f)
+    Path(toml_file_path).write_text(dumps_toml(toml_data), encoding="utf-8")
 
 
 def _parse_dataset_path(raw: str | Path) -> dict:
@@ -262,7 +238,7 @@ def _parse_dataset_path(raw: str | Path) -> dict:
     if not s:
         s = "."
 
-    # Use normpath to clean up things like "data/." â†’ "data"
+    # Use normpath to clean up things like "data/." -> "data"
     s = os.path.normpath(s)
 
     # IMPORTANT: do NOT resolve; keep it relative if it was relative
