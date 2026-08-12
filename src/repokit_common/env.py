@@ -9,14 +9,14 @@ import sys
 from functools import wraps
 
 try:
-    import winreg  # type: ignore[attr-defined]
+    import winreg
 except ImportError:
     winreg = None  # Not Windows
 
 from .base import PROJECT_ROOT, install_uv
-from .paths import check_path_format, get_relative_path
 from .executables import is_installed
-from .env_paths import exe_to_env, exe_to_path, remove_from_env
+from .env_paths import exe_to_env, exe_to_path, remove_from_env  # noqa: F401
+from .paths import check_path_format
 from .secretstore import load_from_env, save_to_env
 from .toml_compat import dumps_toml, load_toml_path, read_toml_text
 
@@ -173,9 +173,9 @@ def package_installer(required_libraries: list = None):
 
     try:
         installed_pkgs = {
-            name.lower()
+            dist.metadata["Name"].lower()
             for dist in importlib.metadata.distributions()
-            if (name := dist.metadata.get("Name")) is not None
+            if "Name" in dist.metadata
         }
     except Exception as e:
         print(f"[WARN] Error checking installed packages: {e}")
@@ -214,32 +214,6 @@ def package_installer(required_libraries: list = None):
             )
         except subprocess.CalledProcessError as e:
             print(f"[ERROR] Failed to install {lib} with pip: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def get_version(programming_language):

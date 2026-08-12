@@ -27,4 +27,5 @@ def dumps_toml(data: dict) -> str:
     if sys.version_info < (3, 11):
         return toml.dumps(data)
 
-    return tomli_w.dumps(data)  # type: ignore[union-attr]
+    assert tomli_w is not None
+    return tomli_w.dumps(data)

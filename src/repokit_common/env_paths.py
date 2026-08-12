@@ -13,7 +13,7 @@ from .paths import check_path_format, get_relative_path
 from .secretstore import load_from_env, save_to_env
 
 try:
-    import winreg  # type: ignore[attr-defined]
+    import winreg
 except ImportError:
     winreg = None
 
@@ -99,7 +99,11 @@ def remove_from_env(executable: str, path: str = None):
     if not path:
         return False
     os.environ["PATH"] = os.pathsep.join(
-        [p for p in os.environ.get("PATH", "").split(os.pathsep) if _norm_for_compare(p) != _norm_for_compare(path)]
+        [
+            p
+            for p in os.environ.get("PATH", "").split(os.pathsep)
+            if _norm_for_compare(p) != _norm_for_compare(path)
+        ]
     )
     if platform.system().lower() == "windows":
         _win_remove_from_user_path(path)
@@ -126,4 +130,3 @@ def exe_to_env(executable: str, path=None, relative=False):
         return True
     print(f"{executable}:path does not exist: {path}")
     return False
-

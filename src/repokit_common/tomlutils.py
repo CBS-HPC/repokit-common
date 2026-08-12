@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union, cast
 
 import pathspec
 from pathspec.patterns import GitWildMatchPattern
@@ -93,13 +93,21 @@ def toml_ignore(
     if os.path.exists(toml_full_path):
         try:
             config = load_toml_path(toml_full_path)
-            patterns = config.get("tool", {}).get(tool_name) or config.get(tool_name)
+            tool_config = config.get("tool")
+            patterns = (
+                tool_config.get(tool_name)
+                if isinstance(tool_config, dict)
+                else config.get(tool_name)
+            )
             if isinstance(patterns, dict):
-                patterns = patterns.get(toml_key, [])
-            if isinstance(patterns, list):
-                patterns = [p.strip() for p in patterns if isinstance(p, str)]
-                spec = pathspec.PathSpec.from_lines(GitWildMatchPattern, patterns)
-                return spec, patterns
+                patterns_dict = cast(dict[str, Any], patterns)
+                nested_patterns = patterns_dict.get(toml_key, [])
+            else:
+                nested_patterns = patterns
+            if isinstance(nested_patterns, list):
+                normalized_patterns = [p.strip() for p in nested_patterns if isinstance(p, str)]
+                spec = pathspec.PathSpec.from_lines(GitWildMatchPattern, normalized_patterns)
+                return spec, normalized_patterns
         except Exception as e:
             print(f"Error reading [{tool_name}] from {toml_full_path}: {e}")
 
@@ -132,9 +140,7 @@ def read_toml(
     json_path = None
     if json_filename:
         json_path = (
-            json_filename
-            if os.path.isabs(json_filename)
-            else os.path.join(folder, json_filename)
+            json_filename if os.path.isabs(json_filename) else os.path.join(folder, json_filename)
         )
     if json_path and os.path.exists(json_path):
         try:
@@ -249,7 +255,7 @@ def _parse_dataset_path(raw: str | Path) -> dict:
 
 def toml_dataset_path(
     first_pattern: Optional[Union[str, Path]] = None,
-) -> dict:
+) -> tuple[dict[str, Path | bool], str]:
     """
     Resolve the default dataset path configuration.
 
@@ -259,8 +265,8 @@ def toml_dataset_path(
     3. Fallback: "./data/*"
 
     Returns:
-        dict with keys {"parent_path": Path, "sub_dir": bool}
-        as produced by `_parse_dataset_path`.
+        A `(config, pattern)` tuple where `config` has keys `parent_path` and
+        `sub_dir`, and `pattern` is the resolved string used to produce it.
     """
     # 1) Normalise explicit argument if provided
     if isinstance(first_pattern, (str, Path)):

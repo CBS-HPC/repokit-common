@@ -6,12 +6,10 @@ import subprocess
 # ---- Secret manager (optional) ----
 try:
     import keyring
-    from keyring.errors import KeyringError, NoKeyringError
 
     _HAS_KEYRING = True
-except Exception:
+except ImportError:
     keyring = None
-    KeyringError = NoKeyringError = Exception  # type: ignore
     _HAS_KEYRING = False
 
 from .base import PROJECT_ROOT
@@ -70,7 +68,7 @@ def _keyring_get(name: str) -> str | None:
             v = keyring.get_password(_secret_service_name(), k)
             if v:
                 return v
-        except (KeyringError, NoKeyringError):
+        except Exception:
             return None
     return None
 
@@ -84,7 +82,7 @@ def _keyring_set(name: str, value: str) -> bool:
         if os.getenv("SECRET_WRITE_GLOBAL_ALIAS", "").lower() in ("1", "true", "yes"):
             keyring.set_password(_secret_service_name(), name, value)
         return True
-    except (KeyringError, NoKeyringError):
+    except Exception:
         return False
 
 

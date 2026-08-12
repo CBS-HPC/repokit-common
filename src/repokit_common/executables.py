@@ -128,4 +128,3 @@ def is_installed(
         print(f"{name} is not on Path")
         return False
     return persist_executable_path(executable, resolved)
-

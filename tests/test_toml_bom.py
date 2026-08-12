@@ -5,7 +5,7 @@ import repokit_common.tomlutils as tomlutils
 def test_save_to_env_updates_bom_pyproject(tmp_path, monkeypatch):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
-        "\ufeff[project]\nname = \"smoke\"\n\n[tool.cookiecutter]\nrepo_name = \"smoke\"\n",
+        '\ufeff[project]\nname = "smoke"\n\n[tool.cookiecutter]\nrepo_name = "smoke"\n',
         encoding="utf-8",
     )
     monkeypatch.setattr(secretstore, "PROJECT_ROOT", tmp_path)
@@ -19,7 +19,7 @@ def test_save_to_env_updates_bom_pyproject(tmp_path, monkeypatch):
 def test_read_toml_accepts_utf8_bom(tmp_path, monkeypatch):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
-        "\ufeff[project]\nname = \"smoke\"\n\n[tool.datasets]\npatterns = \"data/*\"\n",
+        '\ufeff[project]\nname = "smoke"\n\n[tool.datasets]\npatterns = "data/*"\n',
         encoding="utf-8",
     )
     monkeypatch.setattr(tomlutils, "PROJECT_ROOT", tmp_path)
