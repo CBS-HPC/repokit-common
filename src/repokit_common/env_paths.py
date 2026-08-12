@@ -6,15 +6,16 @@ import ctypes
 import os
 import pathlib
 import platform
+import sys
 
 from dotenv import load_dotenv
 
 from .paths import check_path_format, get_relative_path
 from .secretstore import load_from_env, save_to_env
 
-try:
+if sys.platform == "win32":
     import winreg
-except ImportError:
+else:
     winreg = None
 
 
