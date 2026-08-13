@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repokit-common"
-version = "0.1"
+version = "1.0.0"
 description = "Shared utilities for Repokit"
 readme = "README.md"
 authors = [
@@ -20,7 +20,6 @@ keywords = [
     "data-management",
 ]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -28,18 +27,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "python-dotenv",
-    "pathspec",
-    "PyYAML",
-    "requests",
-    "toml ; python_version < \"3.11\"",
-    "tomli-w ; python_version >= \"3.11\"",
-    "tomlkit",
+    "python-dotenv>=1.0",
+    "pathspec>=0.12",
+    "toml>=0.10 ; python_version < \"3.11\"",
+    "tomli-w>=1.0 ; python_version >= \"3.11\"",
+    "tomlkit>=0.13",
 ]
 requires-python = ">=3.10"
-
-[project.license]
-file = "LICENSE"
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.urls]
 Homepage = "https://github.com/CBS-HPC/repokit-common"
@@ -53,6 +49,9 @@ dev = [
     "mypy>=1.10",
     "types-toml",
     "uv",
+    "pytest-cov>=5",
+    "build>=1.2",
+    "twine>=6",
 ]
 secrets = [
     "keyring",
@@ -83,3 +82,13 @@ check_untyped_defs = false
 no_implicit_optional = false
 strict_optional = false
 exclude = '(^\.venv/|^build/|^dist/)'
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["repokit_common"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

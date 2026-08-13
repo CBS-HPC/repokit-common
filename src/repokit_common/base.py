@@ -46,7 +46,7 @@ def install_uv():
             import uv  # noqa: F401
 
             return True
-        except subprocess.CalledProcessError as e:
+        except (ImportError, subprocess.CalledProcessError) as e:
             print(f"Failed to install 'uv' via pip: {e}")
             return False
 

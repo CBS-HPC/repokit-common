@@ -2,7 +2,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
 build/
 *.egg-info/
-uv.lock
 .env

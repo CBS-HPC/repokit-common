@@ -6,7 +6,7 @@ from .secretstore import load_from_env, save_to_env
 
 def split_multi(val: str | None) -> list[str]:
     if not val or not isinstance(val, str):
-        return None
+        return []
     raw = [p.strip() for p in val.replace(";", ",").split(",")]
     return [p for p in raw if p]
 

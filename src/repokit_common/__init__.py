@@ -1,7 +1,15 @@
-# utils/__init__.py# common/__init__.py
 """
-Explicit re-exports for helpers that used to live in one big module.
+Stable public API for Repokit shared utilities.
+
+Only names listed in ``__all__`` are supported as part of the 1.x API.
 """
+
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("repokit-common")
+except PackageNotFoundError:
+    __version__ = "0+unknown"
 
 # ---- common.bases ----
 from .base import (
@@ -22,8 +30,8 @@ from .env import (
     is_installed,
     package_installer,
     remove_from_env,
+    run_command,
     run_script,
-    _run,
     set_packages,
     set_program_path,
     write_uv_requires,
@@ -41,15 +49,7 @@ from .paths import (
 from .prompts import ask_yes_no, git_user_info, repo_user_info, split_multi, prompt_user
 
 # ---- common.secretstore ----
-from .secretstore import (
-    _keyring_get,
-    _keyring_set,
-    _project_slug,
-    _secret_service_name,
-    _slugify,
-    load_from_env,
-    save_to_env,
-)
+from .secretstore import load_from_env, save_to_env
 from .tomlutils import (
     read_toml,
     toml_ignore,
@@ -61,6 +61,7 @@ from .tomlutils import (
 )
 
 __all__ = (
+    "__version__",
     # base
     "project_root",
     "PROJECT_ROOT",
@@ -71,11 +72,6 @@ __all__ = (
     "make_safe_path",
     "change_dir",
     # secretstore
-    "_slugify",
-    "_project_slug",
-    "_secret_service_name",
-    "_keyring_get",
-    "_keyring_set",
     "load_from_env",
     "save_to_env",
     # prompts
@@ -96,7 +92,7 @@ __all__ = (
     "get_version",
     "set_program_path",
     "run_script",
-    "_run",
+    "run_command",
     "ensure_correct_kernel",
     # tomlutils
     "toml_ignore",

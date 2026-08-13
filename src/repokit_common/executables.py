@@ -8,6 +8,7 @@ import platform
 import shutil
 
 from .base import PROJECT_ROOT
+from .env_paths import exe_to_path
 from .secretstore import load_from_env, save_to_env
 
 
@@ -15,8 +16,9 @@ def _candidate_executable_names(executable: str) -> list[str]:
     names = [executable]
     if platform.system().lower() == "windows":
         for ext in (".exe", ".bat", ".cmd"):
-            if not executable.lower().endswith(ext):
-                names.append(f"{executable}{ext}")
+            if executable.lower().endswith(ext):
+                return names
+        names.extend(f"{executable}{ext}" for ext in (".exe", ".bat", ".cmd"))
     return names
 
 
@@ -97,12 +99,20 @@ def resolve_executable(executable: str, local_path: str | None = None) -> pathli
     return _resolve_from_config_or_path(executable, names)
 
 
-def persist_executable_path(executable: str, executable_path: pathlib.Path) -> bool:
-    """Persist executable directory to .env and process environment."""
+def persist_executable_path(
+    executable: str,
+    executable_path: pathlib.Path,
+    *,
+    prefer: bool = False,
+) -> bool:
+    """Persist an executable directory and make it available on process PATH."""
     p = executable_path.resolve()
     pdir = p.parent if p.is_file() else p
-    save_to_env(str(pdir), executable.upper())
-    os.environ[executable.upper()] = str(pdir)
+    path_text = str(pdir)
+    if not exe_to_path(executable, path_text, prepend=prefer):
+        return False
+    save_to_env(path_text, executable.upper())
+    os.environ[executable.upper()] = path_text
     return True
 
 
@@ -127,4 +137,4 @@ def is_installed(
     if resolved is None:
         print(f"{name} is not on Path")
         return False
-    return persist_executable_path(executable, resolved)
+    return persist_executable_path(executable, resolved, prefer=local_path is not None)

@@ -43,27 +43,43 @@ def _win_add_to_user_path(path: str) -> bool:
         return False
 
 
-def exe_to_path(executable: str, path=None):
+def exe_to_path(executable: str, path=None, *, prepend: bool = False) -> bool:
+    """Add an executable directory to the current process PATH.
+
+    When ``prepend`` is true, the directory takes precedence over an existing
+    executable with the same name elsewhere on PATH. Windows installations are
+    also recorded in the user PATH for future shells.
+    """
     if path is None:
         path = load_from_env(executable, ".cookiecutter")
     path = check_path_format(path)
     if not path:
         print(f"{executable}:path missing")
         return False
-    if path in os.environ["PATH"]:
-        print(f"{executable} in path")
-        return True
-    if os.path.exists(path):
-        os.environ["PATH"] += os.pathsep + path
-        if platform.system().lower() == "windows":
-            if _win_add_to_user_path(path):
-                print(f"{executable} added to user PATH persistently")
-            else:
-                print(f"{executable} added to process PATH only")
-        print(f"{executable}:path set to {path}")
-        return True
-    print(f"{executable}:path does not exist: {path}")
-    return False
+
+    path_obj = pathlib.Path(path).expanduser()
+    if path_obj.is_file():
+        path_obj = path_obj.parent
+    if not path_obj.is_dir():
+        print(f"{executable}:path does not exist: {path}")
+        return False
+
+    path_text = str(path_obj.resolve())
+    normalized_path = _norm_for_compare(path_text)
+    current_entries = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    other_entries = [
+        entry for entry in current_entries if _norm_for_compare(entry) != normalized_path
+    ]
+    updated_entries = [path_text, *other_entries] if prepend else [*other_entries, path_text]
+    os.environ["PATH"] = os.pathsep.join(updated_entries)
+
+    if platform.system().lower() == "windows":
+        if _win_add_to_user_path(path_text):
+            print(f"{executable} added to user PATH persistently")
+        else:
+            print(f"{executable} added to process PATH only")
+    print(f"{executable}:path set to {path_text}")
+    return True
 
 
 def _norm_for_compare(p: str) -> str:

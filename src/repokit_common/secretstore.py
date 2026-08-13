@@ -147,7 +147,12 @@ def load_from_env(
         if val:
             return check_path_format(val)
 
-    # 2) .env path resolve
+    # 2) Already-set process environment variable.
+    val = os.getenv(name_upper)
+    if val:
+        return check_path_format(val)
+
+    # 3) .env path resolve
     env_path = pathlib.Path(env_file)
     if not env_path.is_absolute():
         env_path = PROJECT_ROOT / env_path.name

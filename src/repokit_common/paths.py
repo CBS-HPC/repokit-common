@@ -15,6 +15,8 @@ def check_path_format(path, project_root=None):
     if not path:
         return path
 
+    path = os.fspath(path)
+
     if any(sep in path for sep in ["/", "\\", ":"]) and os.path.exists(
         path
     ):  # ":" for Windows drive letters
