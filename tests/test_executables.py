@@ -1,6 +1,9 @@
 import os
 import pathlib
+import platform
 import shutil
+import stat
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,7 +14,13 @@ import repokit_common.env_paths as env_paths
 def _make_executable(path: pathlib.Path) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("", encoding="utf-8")
+    if platform.system().lower() != "windows":
+        path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+def _executable_name(name: str) -> str:
+    return f"{name}.exe" if platform.system().lower() == "windows" else name
 
 
 @pytest.fixture
@@ -21,7 +30,7 @@ def isolated_path(monkeypatch):
 
 
 def test_local_nested_executable_is_preferred_and_callable(tmp_path, monkeypatch, isolated_path):
-    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / "rclone.exe")
+    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / _executable_name("rclone"))
     persisted = {}
 
     monkeypatch.setattr(executables, "PROJECT_ROOT", tmp_path)
@@ -36,8 +45,8 @@ def test_local_nested_executable_is_preferred_and_callable(tmp_path, monkeypatch
 
 
 def test_local_executable_takes_precedence_over_global_match(tmp_path, monkeypatch, isolated_path):
-    global_executable = _make_executable(tmp_path / "global" / "rclone.exe")
-    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / "rclone.exe")
+    global_executable = _make_executable(tmp_path / "global" / _executable_name("rclone"))
+    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / _executable_name("rclone"))
 
     monkeypatch.setattr(executables, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(executables, "save_to_env", lambda *args: None)
@@ -50,7 +59,7 @@ def test_local_executable_takes_precedence_over_global_match(tmp_path, monkeypat
 def test_local_lookup_rejects_global_binary_outside_local_root(
     tmp_path, monkeypatch, isolated_path
 ):
-    global_executable = _make_executable(tmp_path / "global" / "rclone.exe")
+    global_executable = _make_executable(tmp_path / "global" / _executable_name("rclone"))
 
     monkeypatch.setattr(executables, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(executables, "save_to_env", lambda *args: None)
@@ -63,8 +72,8 @@ def test_local_lookup_rejects_global_binary_outside_local_root(
 def test_configured_path_outside_local_root_does_not_override_local_match(
     tmp_path, monkeypatch, isolated_path
 ):
-    configured = _make_executable(tmp_path / "global" / "rclone.exe")
-    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / "rclone.exe")
+    configured = _make_executable(tmp_path / "global" / _executable_name("rclone"))
+    local_executable = _make_executable(tmp_path / "bin" / "rclone-v1" / _executable_name("rclone"))
 
     monkeypatch.setattr(executables, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(executables, "load_from_env", lambda _: str(configured))
@@ -76,14 +85,14 @@ def test_configured_path_outside_local_root_does_not_override_local_match(
 
 
 def test_non_local_resolution_uses_configured_directory(tmp_path, monkeypatch):
-    executable = _make_executable(tmp_path / "tools" / "rclone.exe")
+    executable = _make_executable(tmp_path / "tools" / _executable_name("rclone"))
     monkeypatch.setattr(executables, "load_from_env", lambda _: str(executable.parent))
 
     assert executables.resolve_executable("rclone") == executable.resolve()
 
 
 def test_candidate_names_include_windows_extensions(monkeypatch):
-    monkeypatch.setattr(executables.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(executables, "platform", SimpleNamespace(system=lambda: "Windows"))
 
     assert executables._candidate_executable_names("rclone") == [
         "rclone",
@@ -135,7 +144,7 @@ def test_remove_from_env_removes_normalized_path(tmp_path, monkeypatch, isolated
 def test_exe_to_path_reports_persistent_windows_update(tmp_path, monkeypatch, isolated_path):
     tools = tmp_path / "tools"
     tools.mkdir()
-    monkeypatch.setattr(env_paths.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(env_paths, "platform", SimpleNamespace(system=lambda: "Windows"))
     monkeypatch.setattr(
         env_paths, "_win_add_to_user_path", lambda path: path == str(tools.resolve())
     )
