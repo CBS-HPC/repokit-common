@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repokit-common"
-version = "1.0.0"
+version = "0.1.0"
 description = "Shared utilities for Repokit"
 readme = "README.md"
 authors = [

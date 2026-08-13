@@ -3,7 +3,7 @@
 All notable changes to `repokit-common` are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] - Unreleased
+## [0.1.0] - 2026-08-13
 
 ### Added
 
@@ -33,5 +33,5 @@ All notable changes to `repokit-common` are documented here. The project follows
 
 ## [0.x]
 
-Pre-1.0 development releases. Their API and behavior were not covered by the
-1.x compatibility promise.
+This release establishes the current API baseline. The compatibility promise
+will be formalized in a future 1.0 release.
