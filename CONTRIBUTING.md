@@ -17,9 +17,7 @@ uv tool run twine check dist/*
 
 ## Compatibility rules
 
-- Names in `repokit_common.__all__` are the documented public API. Preserve
-  them where practical during the 0.x line; a stricter compatibility contract
-  will begin with a future 1.0 release.
+- Only names in `repokit_common.__all__` are part of the supported public API.
 - Preserve behavior across Python 3.10 and 3.12 on Linux, Windows, and macOS.
 - Add a regression test for every bug fix that changes configuration, paths,
   executable lookup, or TOML output.

@@ -1,7 +1,7 @@
 """
 Stable public API for Repokit shared utilities.
 
-Only names listed in ``__all__`` are documented as public API.
+Only names listed in ``__all__`` are supported as part of the 1.x API.
 """
 
 from importlib.metadata import PackageNotFoundError, version

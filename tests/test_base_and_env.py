@@ -7,7 +7,7 @@ import repokit_common.env as env
 
 
 def test_public_api_has_release_version_and_no_private_helpers():
-    assert repokit_common.__version__ == "0.1.0"
+    assert repokit_common.__version__ == "1.0.0"
     assert "run_command" in repokit_common.__all__
     assert "_run" not in repokit_common.__all__
     assert "_keyring_get" not in repokit_common.__all__

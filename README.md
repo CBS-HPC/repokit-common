@@ -20,7 +20,7 @@ Release artifacts are published as immutable GitHub Release assets. Install a
 specific version rather than a mutable branch URL:
 
 ```bash
-python -m pip install https://github.com/CBS-HPC/repokit-common/releases/download/v0.1.0/repokit_common-0.1.0-py3-none-any.whl
+pip install https://github.com/CBS-HPC/repokit-common/releases/download/v1.0.0/repokit_common-1.0.0-py3-none-any.whl
 ```
 
 Each release includes `SHA256SUMS` for artifact verification.
@@ -36,12 +36,10 @@ token = load_from_env("GITHUB_TOKEN")
 is_available = is_installed("rclone", "Rclone", local_path="./bin")
 ```
 
-## Public API and side effects
+## Stable API and side effects
 
-The names in `repokit_common.__all__` are the documented public API. The
-package is still in the 0.x release line, so breaking changes remain possible
-before a future 1.0 stability commitment. Names with a leading underscore and
-module-internal imports are not compatibility promises.
+The names in `repokit_common.__all__` are the supported 1.x API. Names with a
+leading underscore and module-internal imports are not compatibility promises.
 
 Some public functions intentionally change external state:
 
